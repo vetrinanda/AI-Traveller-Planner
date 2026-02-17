@@ -1,14 +1,18 @@
 from langgraph.graph import Graph,StateGraph,END
 from langchain_core.templates import ChatPromptTemplate
 from langchain_core.messages import HumanMessage,SystemMessage
-from langchain_openai import ChatOpenAI
+from langchain_google_genai import ChatGoogleGenerativeAI
 from typing import TypedDict,Annotated
 from operator import add
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
 
 class State(TypedDict):
     messages:Annotated[list,add]
 
-llm = ChatOpenAI(model="gpt-4o-mini",temperature=0)
+llm = ChatGoogleGenerativeAI(api_key=os.getenv("GOOGLE_API_KEY"),model="gemini-2.5-flash",temperature=0)
 
 prompt = ChatPromptTemplate.from_messages([
     ("system","You are a helpful assistant."),
