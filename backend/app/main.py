@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from app.agents import run_chatbot
+from app.limiter import limiter
 
 app = FastAPI()
 
