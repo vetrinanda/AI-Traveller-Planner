@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from agents import run_chatbot
+from app.agents import run_chatbot
 
 app = FastAPI()
 
