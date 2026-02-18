@@ -8,3 +8,7 @@ app = FastAPI()
 def chat():
     return run_chatbot("Hello")
 
+@app.get("/chat")
+@limiter.limit("5/day")
+def chat(question:str):
+    return run_chatbot(question)
