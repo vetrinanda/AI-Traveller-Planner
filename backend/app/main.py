@@ -12,3 +12,8 @@ def chat():
 @limiter.limit("5/day")
 def chat(question:str):
     return run_chatbot(question)
+
+@app.get("/plan")
+@limiter.limit("5/day")
+def chat(question:str):
+    return run_chatbot(question)
