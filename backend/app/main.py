@@ -42,7 +42,7 @@ def root():
 
 
 @app.post("/plan", response_model=PlanResponse)
-@limiter.limit("10/minute")
+@limiter.limit("5/day")
 def plan(request: Request, body: PlanRequest):
     """
     Generate a day-trip itinerary.
