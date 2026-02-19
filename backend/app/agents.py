@@ -1,35 +1,90 @@
-from langgraph.graph import StateGraph,END
+from langgraph.graph import StateGraph, END
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import HumanMessage, AIMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
-from typing import TypedDict,Annotated
-from operator import add
+from typing import TypedDict, Annotated, List
 from dotenv import load_dotenv
 import os
 
 load_dotenv()
 
-class State(TypedDict):
-    messages:Annotated[list,add]
+# ── State ──────────────────────────────────────────────────────────────────────
+class PlannerState(TypedDict):
+    messages: Annotated[List[HumanMessage | AIMessage], "The messages in the conversation"]
+    city: str
+    interests: List[str]
+    itinerary: str
 
-llm = ChatGoogleGenerativeAI(api_key=os.getenv("GOOGLE_API_KEY"),model="gemini-2.5-flash",temperature=0)
+# ── LLM ────────────────────────────────────────────────────────────────────────
+llm = ChatGoogleGenerativeAI(
+    api_key=os.getenv("GOOGLE_API_KEY"),
+    model="gemini-3-flash-preview",
+    temperature=0
+)
 
-prompt = ChatPromptTemplate.from_messages([
-    ("system","You are a helpful assistant."),
-    ("user"," {question}")
+# ── Prompt ─────────────────────────────────────────────────────────────────────
+itinerary_prompt = ChatPromptTemplate.from_messages([
+    (
+        "system",
+        "You are an excellent and professional travel assistant. "
+        "Create a detailed day trip itinerary for {city} based on the user's interests: {interests}. "
+        "Provide a well-structured, bulleted itinerary with timings."
+    ),
+    ("human", "Create an itinerary for my day trip.")
 ])
 
-chain = prompt | llm
+# ── Helpers ────────────────────────────────────────────────────────────────────
+def _extract_text(content) -> str:
+    """Safely extract a plain string from an LLM response content field.
+    Gemini may return a list of content blocks: [{'type': 'text', 'text': '...'}]
+    or a plain string depending on the API version.
+    """
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts = []
+        for block in content:
+            if isinstance(block, dict) and block.get("type") == "text":
+                parts.append(block.get("text", ""))
+            elif isinstance(block, str):
+                parts.append(block)
+        return "".join(parts)
+    return str(content)
 
-def chatbot(state:State):
-    return {"messages":[chain.invoke(state["messages"])]}
+# ── Nodes ──────────────────────────────────────────────────────────────────────
+def create_itinerary(state: PlannerState) -> PlannerState:
+    response = llm.invoke(
+        itinerary_prompt.format_messages(
+            city=state["city"],
+            interests=", ".join(state["interests"])
+        )
+    )
+    text = _extract_text(response.content)
+    return {
+        **state,
+        "itinerary": text,
+        "messages": state["messages"] + [AIMessage(content=text)]
+    }
 
-graph_builder = StateGraph(State)
-graph_builder.add_node("chatbot",chatbot)
-graph_builder.add_edge("chatbot",END)
-graph_builder.set_entry_point("chatbot")
+# ── Graph ──────────────────────────────────────────────────────────────────────
+workflow = StateGraph(PlannerState)
+workflow.add_node("create_itinerary", create_itinerary)
+workflow.set_entry_point("create_itinerary")
+workflow.add_edge("create_itinerary", END)
 
-graph = graph_builder.compile()
+graph = workflow.compile()
 
-def run_chatbot(question:str):
-    return graph.invoke({"messages":[HumanMessage(content=question)]})
+# ── Public API function ────────────────────────────────────────────────────────
+def plan_trip(city: str, interests: List[str]) -> str:
+    """
+    Given a city and a list of interests, run the LangGraph workflow
+    and return the generated itinerary string.
+    """
+    initial_state: PlannerState = {
+        "messages": [HumanMessage(content=f"Plan a day trip to {city}.")],
+        "city": city,
+        "interests": interests,
+        "itinerary": ""
+    }
+    final_state = graph.invoke(initial_state)
+    return final_state["itinerary"]
