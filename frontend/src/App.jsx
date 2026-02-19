@@ -63,7 +63,8 @@ export default function App() {
     if (interests.length === 0) { setError('Choose at least one interest.'); return; }
     setError(''); setStep('loading');
     try {
-      const { data } = await axios.post('/api/plan', { city, interests });
+      const apiBase = import.meta.env.VITE_API_URL ?? '';
+      const { data } = await axios.post(`${apiBase}/plan`, { city, interests });
       setItinerary(data.itinerary);
       setStep('result');
     } catch (err) {
